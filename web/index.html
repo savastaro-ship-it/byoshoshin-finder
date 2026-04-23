@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>大阪・病初診 届出医療機関 検索</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #1a1a1a;
+    --muted: #777;
+    --line: #e4e2dc;
+    --accent: #0f6b5b;
+    --card: #ffffff;
+    --hit: #fff8e1;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    background: var(--bg); color: var(--ink);
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 20px 16px 80px; }
+  header h1 {
+    font-size: 18px; margin: 0 0 4px; font-weight: 600;
+  }
+  header p {
+    font-size: 12px; color: var(--muted); margin: 0 0 16px;
+    line-height: 1.5;
+  }
+  .search {
+    position: sticky; top: 0; background: var(--bg);
+    padding: 10px 0 12px; z-index: 10;
+    border-bottom: 1px solid var(--line);
+  }
+  .search input {
+    width: 100%; font-size: 17px; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: #fff; color: var(--ink);
+    -webkit-appearance: none; appearance: none;
+  }
+  .search input:focus {
+    outline: 2px solid var(--accent); outline-offset: -1px;
+  }
+  .hint {
+    font-size: 12px; color: var(--muted); margin: 6px 2px 0;
+  }
+  .count {
+    font-size: 13px; color: var(--muted); margin: 14px 0 8px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 14px 12px;
+    margin: 0 0 10px;
+  }
+  .card .name {
+    font-weight: 600; font-size: 15px; line-height: 1.4;
+    margin: 0 0 4px;
+  }
+  .card .meta {
+    font-size: 12px; color: var(--muted); margin: 0 0 8px;
+  }
+  .card .addr { font-size: 13px; margin: 0 0 6px; line-height: 1.5; }
+  .card .tel a {
+    font-size: 13px; color: var(--accent); text-decoration: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .card .links { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .card .links a {
+    font-size: 12px; padding: 6px 10px;
+    border: 1px solid var(--line); border-radius: 999px;
+    text-decoration: none; color: var(--ink); background: #fff;
+  }
+  .card .links a:active { background: #f0efe9; }
+  .tag {
+    display: inline-block; font-size: 11px;
+    color: var(--accent); border: 1px solid var(--accent);
+    padding: 1px 6px; border-radius: 4px; margin-right: 6px;
+    vertical-align: 1px;
+  }
+  mark { background: var(--hit); padding: 0 1px; }
+  .empty {
+    text-align: center; color: var(--muted); padding: 40px 10px; font-size: 14px;
+  }
+  .suggest { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .suggest button {
+    font-size: 12px; padding: 5px 10px; border: 1px solid var(--line);
+    background: #fff; border-radius: 999px; cursor: pointer; color: var(--ink);
+  }
+  .suggest button:active { background: #f0efe9; }
+  footer {
+    margin-top: 24px; font-size: 11px; color: var(--muted);
+    line-height: 1.6; padding: 0 4px;
+  }
+  footer a { color: var(--muted); }
+  .err {
+    background: #fff2f0; border: 1px solid #ffccc7; color: #a8071a;
+    padding: 10px 12px; border-radius: 8px; font-size: 13px; margin: 16px 0;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>大阪・病初診 届出医療機関 検索</h1>
+    <p>
+      近畿厚生局が公表している「施設基準の届出受理医療機関名簿」から、
+      <strong>病初診</strong>を届け出ている大阪府内の医科医療機関を抽出して検索できます。
+    </p>
+  </header>
+
+  <div class="search">
+    <input id="q" type="search" inputmode="search" autocomplete="off"
+           placeholder="地名を入力（例: 門真、茨木、中央区、守口）">
+    <div class="hint" id="meta">データを読み込み中…</div>
+  </div>
+
+  <div class="suggest" id="suggest"></div>
+  <div class="count" id="count"></div>
+  <div id="list"></div>
+
+  <footer>
+    出典：<a href="https://kouseikyoku.mhlw.go.jp/kinki/gyomu/gyomu/hoken_kikan/shitei_jokyo_00004.html" target="_blank" rel="noopener">近畿厚生局「保険医療機関・保険薬局の施設基準の届出受理状況」</a><br>
+    このページは上記公表データを元に作成した非公式の検索ビューです。正確な情報は必ず出典側でご確認ください。
+  </footer>
+</div>
+
+<script>
+const $q     = document.getElementById("q");
+const $list  = document.getElementById("list");
+const $count = document.getElementById("count");
+const $meta  = document.getElementById("meta");
+const $sug   = document.getElementById("suggest");
+
+let RECORDS = [];
+
+// ---- ロード ----
+Promise.all([
+  fetch("data.json").then(r => r.json()),
+  fetch("meta.json").then(r => r.json()).catch(() => null),
+]).then(([data, meta]) => {
+  RECORDS = data;
+  if (meta) {
+    const ym = meta.data_year_month || "";
+    $meta.textContent = `${ym ? ym + " 版／" : ""}${meta.record_count ?? data.length}件（病初診 届出のみ）`;
+  } else {
+    $meta.textContent = `${data.length}件（病初診 届出のみ）`;
+  }
+  buildSuggest();
+  // URLハッシュから初期クエリを拾う（#q=門真）
+  const h = new URLSearchParams(location.hash.slice(1));
+  const init = h.get("q");
+  if (init) { $q.value = init; }
+  render();
+}).catch(err => {
+  $meta.innerHTML = `<div class="err">データ読み込みエラー: ${err}<br>data.json と meta.json を同じフォルダに置いてください。</div>`;
+});
+
+// ---- よく使う地名のサジェスト（件数上位10） ----
+function buildSuggest() {
+  const counts = {};
+  for (const r of RECORDS) {
+    const c = r.city || "";
+    if (c) counts[c] = (counts[c] || 0) + 1;
+  }
+  const top = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 10);
+  $sug.innerHTML = top.map(([c, n]) => `<button data-q="${esc(c)}">${esc(c)} (${n})</button>`).join("");
+  $sug.addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    $q.value = b.dataset.q;
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
+// ---- 検索 ----
+$q.addEventListener("input", render);
+
+function render() {
+  const q = $q.value.trim();
+  location.hash = q ? "q=" + encodeURIComponent(q) : "";
+
+  let hits;
+  if (!q) {
+    hits = RECORDS;
+  } else {
+    // スペース区切りでAND検索。住所・市区町村・医療機関名・電話 いずれにもマッチ
+    const terms = q.split(/\s+/).filter(Boolean);
+    hits = RECORDS.filter(r => {
+      const hay = `${r.name} ${r.address} ${r.city} ${r.tel}`;
+      return terms.every(t => hay.includes(t));
+    });
+  }
+
+  $count.textContent = q
+    ? `「${q}」の結果: ${hits.length}件`
+    : `全${hits.length}件`;
+
+  if (hits.length === 0) {
+    $list.innerHTML = `<div class="empty">該当なし。別の地名で試してみてください。</div>`;
+    return;
+  }
+
+  const terms = q.split(/\s+/).filter(Boolean);
+  $list.innerHTML = hits.map(r => card(r, terms)).join("");
+}
+
+function card(r, terms) {
+  const name = hilite(r.name, terms);
+  const addr = hilite(r.address, terms);
+  const tel  = (r.tel || "").replace(/\s+/g, "");
+  const telDisplay = hilite(r.tel || "", terms);
+  const beds = r.beds && r.beds !== "0" ? ` ／ 病床${esc(r.beds)}` : "";
+
+  // 外部リンク
+  const mapsQ = encodeURIComponent(r.name + " " + r.address);
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQ}`;
+  const telLink = tel ? `<a href="tel:${tel}">📞 ${telDisplay}</a>` : "";
+
+  return `
+    <div class="card">
+      <div class="name"><span class="tag">病初診</span>${name}</div>
+      <div class="meta">${esc(r.code || "")}${beds}</div>
+      <div class="addr">${addr || "—"}</div>
+      <div class="tel">${telLink}</div>
+      <div class="links">
+        <a href="${mapsUrl}" target="_blank" rel="noopener">Googleマップで開く</a>
+      </div>
+    </div>`;
+}
+
+// ---- ユーティリティ ----
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  })[c]);
+}
+function hilite(s, terms) {
+  let out = esc(s ?? "");
+  for (const t of terms) {
+    if (!t) continue;
+    const re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+    out = out.replace(re, m => `<mark>${m}</mark>`);
+  }
+  return out;
+}
+</script>
+</body>
+</html>

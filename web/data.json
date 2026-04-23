@@ -1,0 +1,7 @@
+[
+  {"code":"27-XXXXX","name":"（サンプル）門真セントラル病院","address":"大阪府門真市新橋町1-1","tel":"06-0000-0001","beds":"180","byoshoshin_no":"第1号","city":"門真市"},
+  {"code":"27-XXXXX","name":"（サンプル）門真駅前クリニック","address":"大阪府門真市本町2-2","tel":"06-0000-0002","beds":"","byoshoshin_no":"第2号","city":"門真市"},
+  {"code":"27-XXXXX","name":"（サンプル）茨木中央医院","address":"大阪府茨木市駅前3-3","tel":"072-000-0003","beds":"","byoshoshin_no":"第3号","city":"茨木市"},
+  {"code":"27-XXXXX","name":"（サンプル）守口第一病院","address":"大阪府守口市八雲4-4","tel":"06-0000-0004","beds":"240","byoshoshin_no":"第4号","city":"守口市"},
+  {"code":"27-XXXXX","name":"（サンプル）大阪中央総合病院","address":"大阪市中央区本町5-5","tel":"06-0000-0005","beds":"400","byoshoshin_no":"第5号","city":"大阪市中央区"}
+]
