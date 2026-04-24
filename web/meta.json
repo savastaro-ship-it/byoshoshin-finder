@@ -2,10 +2,10 @@
   "source_url": "https://kouseikyoku.mhlw.go.jp/kinki/gyomu/gyomu/hoken_kikan/shitei_jokyo_00004.html",
   "zip_url": "https://kouseikyoku.mhlw.go.jp/kinki/s2026.4_sisetukijun_ika.zip",
   "osaka_xlsx": "s2026.4_sisetukijun_ika/s2026.4_sisetukijun_osaka_ika.xlsx",
-  "byoshoshin_column": "受理届出名称",
+  "byoshoshin_column": "受理記号",
   "data_year_month": "2026-04",
-  "generated_at": "2026-04-24T12:28:58+09:00",
-  "record_count": 0,
+  "generated_at": "2026-04-24T12:44:50+09:00",
+  "record_count": 51,
   "prefecture": "大阪府",
   "category": "医科",
   "filter": "病初診 届出医療機関のみ"
