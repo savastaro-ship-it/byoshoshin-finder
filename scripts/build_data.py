@@ -33,7 +33,7 @@ HEADERS = {
 }
 
 BYOSHOSHIN_COL_CANDIDATES = ["病初診", "病院初診", "初診"]
-OUT_DIR = Path(__file__).resolve().parent.parent / "web"
+OUT_DIR = Path(__file__).resolve().parent.parent / "docs"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
