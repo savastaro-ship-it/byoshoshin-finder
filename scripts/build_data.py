@@ -120,54 +120,54 @@ def find_col(df: pd.DataFrame, candidates: list[str]) -> str:
 
 
 def extract_byoshoshin(df: pd.DataFrame) -> tuple[str, list[dict]]:
-    name_col = find_col(df, ["医療機関名称"])
-    addr_col = find_col(df, ["医療機関所在地", "所在地"])
-    tel_col  = find_col(df, ["電話番号"])
-    num_col  = find_col(df, ["医療機関番号"])
+    """受理届出名称カラムが「病初診」の行だけ抽出する。
+    同じ医療機関が複数の施設基準を届け出ているので、
+    一旦「病初診」の行だけ取り出してから、医療機関単位でまとめる。
+    """
+    name_col    = find_col(df, ["医療機関名称"])
+    addr_col    = find_col(df, ["医療機関所在地（住所）", "医療機関所在地", "所在地"])
+    tel_col     = find_col(df, ["電話番号"])
+    num_col     = find_col(df, ["医療機関番号"])
+    notice_col  = find_col(df, ["受理届出名称"])
+    recv_no_col = find_col(df, ["受理番号"])
+    start_col   = None
+    try:
+        start_col = find_col(df, ["算定開始年月日"])
+    except KeyError:
+        pass
     bed_col = None
     try:
         bed_col = find_col(df, ["病床数"])
     except KeyError:
         pass
 
-    byo_col = None
-    for cand in BYOSHOSHIN_COL_CANDIDATES:
-        for c in df.columns:
-            s = str(c).strip()
-            if s == cand or s.startswith(cand):
-                byo_col = c; break
-        if byo_col is not None:
-            break
-    if byo_col is None:
-        for c in df.columns:
-            if "病初診" in str(c) or "病院初診" in str(c):
-                byo_col = c; break
-    if byo_col is None:
-        raise KeyError(
-            "「病初診」列なし。全列名:\n" + "\n".join(f"  - {repr(c)}" for c in df.columns)
-        )
+    # 受理届出名称が「病初診」の行だけ
+    notice = df[notice_col].astype(str).str.strip()
+    mask = notice.str.contains("病初診", na=False) | notice.str.contains("病院初診", na=False)
+    hit = df[mask].copy()
 
-    print(f"病初診の列名: {repr(byo_col)}", file=sys.stderr)
-
-    def is_holder(v) -> bool:
-        if v is None: return False
-        s = str(v).strip()
-        return not (s == "" or s.lower() == "nan" or s in ("-", "ー", "―"))
-
-    hit = df[df[byo_col].apply(is_holder)].copy()
-    print(f"病初診の届出医療機関数: {len(hit)}", file=sys.stderr)
+    print(f"病初診の届出行数: {len(hit)}", file=sys.stderr)
+    # ユニーク（医療機関番号ベース）の件数も出す
+    uniq = hit[num_col].astype(str).nunique()
+    print(f"病初診の届出医療機関数(ユニーク): {uniq}", file=sys.stderr)
 
     records = []
+    seen = set()
     for _, r in hit.iterrows():
+        code = str(r[num_col]).strip() if pd.notna(r[num_col]) else ""
+        if code in seen:
+            continue  # 同じ医療機関の重複行は1件にまとめる
+        seen.add(code)
         records.append({
-            "code": str(r[num_col]).strip() if pd.notna(r[num_col]) else "",
-            "name": str(r[name_col]).strip(),
+            "code":    code,
+            "name":    str(r[name_col]).strip() if pd.notna(r[name_col]) else "",
             "address": str(r[addr_col]).strip() if pd.notna(r[addr_col]) else "",
-            "tel": str(r[tel_col]).strip() if pd.notna(r[tel_col]) else "",
-            "beds": (str(r[bed_col]).strip() if bed_col and pd.notna(r[bed_col]) else ""),
-            "byoshoshin_no": str(r[byo_col]).strip(),
+            "tel":     str(r[tel_col]).strip() if pd.notna(r[tel_col]) else "",
+            "beds":    (str(r[bed_col]).strip() if bed_col and pd.notna(r[bed_col]) else ""),
+            "byoshoshin_no": str(r[recv_no_col]).strip() if pd.notna(r[recv_no_col]) else "",
+            "start_date": (str(r[start_col]).strip() if start_col and pd.notna(r[start_col]) else ""),
         })
-    return byo_col, records
+    return notice_col, records
 
 
 OSAKA_CITIES = [
