@@ -120,15 +120,13 @@ def find_col(df: pd.DataFrame, candidates: list[str]) -> str:
 
 
 def extract_byoshoshin(df: pd.DataFrame) -> tuple[str, list[dict]]:
-    """受理届出名称カラムが「病初診」の行だけ抽出する。
-    同じ医療機関が複数の施設基準を届け出ているので、
-    一旦「病初診」の行だけ取り出してから、医療機関単位でまとめる。
-    """
+    """受理記号カラムの値が「病初診」の行だけ抽出する。"""
     name_col    = find_col(df, ["医療機関名称"])
     addr_col    = find_col(df, ["医療機関所在地（住所）", "医療機関所在地", "所在地"])
     tel_col     = find_col(df, ["電話番号"])
     num_col     = find_col(df, ["医療機関番号"])
     notice_col  = find_col(df, ["受理届出名称"])
+    sign_col    = find_col(df, ["受理記号"])
     recv_no_col = find_col(df, ["受理番号"])
     start_col   = None
     try:
@@ -141,13 +139,12 @@ def extract_byoshoshin(df: pd.DataFrame) -> tuple[str, list[dict]]:
     except KeyError:
         pass
 
-    # 受理届出名称が「病初診」の行だけ
-    notice = df[notice_col].astype(str).str.strip()
-    mask = notice.str.contains("病初診", na=False) | notice.str.contains("病院初診", na=False)
+    # 受理記号が「病初診」の行だけ（前後空白や全角スペースは除去して比較）
+    sign = df[sign_col].astype(str).str.strip()
+    mask = sign == "病初診"
     hit = df[mask].copy()
 
     print(f"病初診の届出行数: {len(hit)}", file=sys.stderr)
-    # ユニーク（医療機関番号ベース）の件数も出す
     uniq = hit[num_col].astype(str).nunique()
     print(f"病初診の届出医療機関数(ユニーク): {uniq}", file=sys.stderr)
 
@@ -156,7 +153,7 @@ def extract_byoshoshin(df: pd.DataFrame) -> tuple[str, list[dict]]:
     for _, r in hit.iterrows():
         code = str(r[num_col]).strip() if pd.notna(r[num_col]) else ""
         if code in seen:
-            continue  # 同じ医療機関の重複行は1件にまとめる
+            continue
         seen.add(code)
         records.append({
             "code":    code,
@@ -164,10 +161,11 @@ def extract_byoshoshin(df: pd.DataFrame) -> tuple[str, list[dict]]:
             "address": str(r[addr_col]).strip() if pd.notna(r[addr_col]) else "",
             "tel":     str(r[tel_col]).strip() if pd.notna(r[tel_col]) else "",
             "beds":    (str(r[bed_col]).strip() if bed_col and pd.notna(r[bed_col]) else ""),
+            "notice_name": str(r[notice_col]).strip() if pd.notna(r[notice_col]) else "",
             "byoshoshin_no": str(r[recv_no_col]).strip() if pd.notna(r[recv_no_col]) else "",
             "start_date": (str(r[start_col]).strip() if start_col and pd.notna(r[start_col]) else ""),
         })
-    return notice_col, records
+    return sign_col, records
 
 
 OSAKA_CITIES = [
