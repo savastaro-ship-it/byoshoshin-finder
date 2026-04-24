@@ -2,6 +2,9 @@
 """
 近畿厚生局の「大阪府・医科・施設基準届出受理医療機関名簿」を取得し、
 「病初診」を届け出ている医療機関だけを抽出して data.json を書き出す。
+
+URL: https://kouseikyoku.mhlw.go.jp/kinki/s{YYYY}.{M}_sisetukijun_ika.zip
+（例: 2026年4月版 = s2026.4_sisetukijun_ika.zip）
 """
 from __future__ import annotations
 
@@ -16,17 +19,17 @@ from pathlib import Path
 import requests
 import pandas as pd
 
-# -----------------------------------------------------------------------------
-INDEX_URL = "https://kouseikyoku.mhlw.go.jp/kinki/gyomu/gyomu/hoken_kikan/shitei_jokyo_00004.html"
+BASE = "https://kouseikyoku.mhlw.go.jp/kinki"
+INDEX_URL = f"{BASE}/gyomu/gyomu/hoken_kikan/shitei_jokyo_00004.html"
 
-# 厚生局は User-Agent 無しアクセスを弾くので、ブラウザっぽいUAを使う
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": "*/*",
     "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+    "Referer": INDEX_URL,
 }
 
 BYOSHOSHIN_COL_CANDIDATES = ["病初診", "病院初診", "初診"]
@@ -34,58 +37,43 @@ OUT_DIR = Path(__file__).resolve().parent.parent / "web"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def fetch_index_html() -> str:
-    r = requests.get(INDEX_URL, headers=HEADERS, timeout=30)
-    r.raise_for_status()
-    # レスポンスのエンコーディングを content から推定させる
-    r.encoding = r.apparent_encoding or "utf-8"
-    return r.text
+def candidate_zip_urls() -> list[str]:
+    """今月から遡って、候補URLのリストを作る。
+    近年は s プレフィックス付きが本流なのでそちらを先に試す。
+    """
+    jst = timezone(timedelta(hours=9))
+    today = datetime.now(jst)
+    y, m = today.year, today.month
+    ym_pairs: list[tuple[int, int]] = []
+    for _ in range(6):  # 今月から遡って6ヶ月
+        ym_pairs.append((y, m))
+        if m == 1: y -= 1; m = 12
+        else: m -= 1
+
+    urls = []
+    for y, m in ym_pairs:
+        urls.append(f"{BASE}/s{y}.{m}_sisetukijun_ika.zip")  # s付きを先に
+        urls.append(f"{BASE}/{y}.{m}_sisetukijun_ika.zip")
+    return urls
 
 
-def find_latest_ika_zip_url() -> str:
-    html = fetch_index_html()
-
-    # パターン1: 通常のZIPリンク
-    # 例: https://kouseikyoku.mhlw.go.jp/kinki/2026.3_sisetukijun_ika.zip
-    patterns = [
-        re.compile(r'https://kouseikyoku\.mhlw\.go\.jp/kinki/[^"\'<>]*sisetukijun_ika\.zip'),
-        # 念のため s2026.4_... のようなプレフィックス版にも対応
-        re.compile(r'https://kouseikyoku\.mhlw\.go\.jp/kinki/s?\d{4}\.\d{1,2}_sisetukijun_ika\.zip'),
-    ]
-    urls: set[str] = set()
-    for pat in patterns:
-        for u in pat.findall(html):
-            urls.add(u)
-
-    if not urls:
-        # デバッグ情報（URL候補があるか）
-        sample = [u for u in re.findall(r'https?://[^"\'<>\s]+', html) if "sisetukijun" in u][:10]
-        print("デバッグ: sisetukijunを含むURL候補（先頭10件）:", file=sys.stderr)
-        for s in sample:
-            print(" ", s, file=sys.stderr)
-        raise RuntimeError(
-            "医科ZIPのURLが見つかりませんでした（ページ構造が変わった？）\n"
-            f"HTML長さ: {len(html)} 文字\n"
-            f"HTML先頭500文字: {html[:500]!r}"
-        )
-
-    def key(u: str) -> tuple[int, int]:
-        m = re.search(r"/s?(\d{4})\.(\d{1,2})_", u)
-        if not m:
-            return (0, 0)
-        return (int(m.group(1)), int(m.group(2)))
-
-    best = sorted(urls, key=key, reverse=True)[0]
-    return best
+def try_get_zip() -> tuple[str, bytes]:
+    errors = []
+    for url in candidate_zip_urls():
+        try:
+            print(f"  試行: {url}", file=sys.stderr)
+            r = requests.get(url, headers=HEADERS, timeout=300)
+            if r.status_code == 200 and len(r.content) > 10000:
+                print(f"  ✓ 取得成功 ({len(r.content):,} bytes)", file=sys.stderr)
+                return url, r.content
+            errors.append(f"{url} -> HTTP {r.status_code}, {len(r.content)} bytes")
+        except requests.RequestException as e:
+            errors.append(f"{url} -> {e}")
+    raise RuntimeError("すべての候補URLで取得失敗:\n" + "\n".join(errors))
 
 
-def load_osaka_ika_df(zip_url: str) -> pd.DataFrame:
-    print(f"ZIP取得中: {zip_url}", file=sys.stderr)
-    resp = requests.get(zip_url, headers=HEADERS, timeout=300)
-    resp.raise_for_status()
-    zf = zipfile.ZipFile(io.BytesIO(resp.content))
-
-    # 大阪医科のxlsxを探す（ZIP直下でもサブフォルダでもOK）
+def load_osaka_ika_df(zip_bytes: bytes) -> tuple[str, pd.DataFrame]:
+    zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
     osaka_name = None
     for name in zf.namelist():
         low = name.lower()
@@ -98,7 +86,7 @@ def load_osaka_ika_df(zip_url: str) -> pd.DataFrame:
     print(f"Excel読み込み中: {osaka_name}", file=sys.stderr)
     with zf.open(osaka_name) as f:
         df_all = pd.read_excel(f, sheet_name=0, header=None, dtype=str, engine="openpyxl")
-    return df_all
+    return osaka_name, df_all
 
 
 def normalize_df(df_raw: pd.DataFrame) -> pd.DataFrame:
@@ -110,11 +98,10 @@ def normalize_df(df_raw: pd.DataFrame) -> pd.DataFrame:
             header_row = i
             break
     if header_row is None:
-        # 先頭20行を表示してデバッグ
         print("ヘッダー行が見つからない。先頭20行:", file=sys.stderr)
         for i in range(min(20, len(df_raw))):
             print(f"  [{i}]", df_raw.iloc[i].astype(str).tolist()[:8], file=sys.stderr)
-        raise RuntimeError("ヘッダー行（医療機関名称を含む行）が見つかりません")
+        raise RuntimeError("ヘッダー行が見つかりません")
 
     df = df_raw.iloc[header_row + 1:].copy()
     df.columns = [str(c).strip() if c is not None else "" for c in df_raw.iloc[header_row].tolist()]
@@ -132,12 +119,12 @@ def find_col(df: pd.DataFrame, candidates: list[str]) -> str:
     raise KeyError(f"該当列なし。候補={candidates}、列={list(df.columns)}")
 
 
-def extract_byoshoshin(df: pd.DataFrame) -> list[dict]:
+def extract_byoshoshin(df: pd.DataFrame) -> tuple[str, list[dict]]:
     name_col = find_col(df, ["医療機関名称"])
     addr_col = find_col(df, ["医療機関所在地", "所在地"])
     tel_col  = find_col(df, ["電話番号"])
     num_col  = find_col(df, ["医療機関番号"])
-    bed_col  = None
+    bed_col = None
     try:
         bed_col = find_col(df, ["病床数"])
     except KeyError:
@@ -148,47 +135,39 @@ def extract_byoshoshin(df: pd.DataFrame) -> list[dict]:
         for c in df.columns:
             s = str(c).strip()
             if s == cand or s.startswith(cand):
-                byo_col = c
-                break
+                byo_col = c; break
         if byo_col is not None:
             break
     if byo_col is None:
         for c in df.columns:
-            s = str(c)
-            if "病初診" in s or "病院初診" in s:
-                byo_col = c
-                break
+            if "病初診" in str(c) or "病院初診" in str(c):
+                byo_col = c; break
     if byo_col is None:
         raise KeyError(
-            "「病初診」の列が見つかりません。全列名:\n" +
-            "\n".join(f"  - {repr(c)}" for c in df.columns)
+            "「病初診」列なし。全列名:\n" + "\n".join(f"  - {repr(c)}" for c in df.columns)
         )
 
     print(f"病初診の列名: {repr(byo_col)}", file=sys.stderr)
 
     def is_holder(v) -> bool:
-        if v is None:
-            return False
+        if v is None: return False
         s = str(v).strip()
-        if s == "" or s.lower() == "nan" or s in ("-", "ー", "―"):
-            return False
-        return True
+        return not (s == "" or s.lower() == "nan" or s in ("-", "ー", "―"))
 
-    mask = df[byo_col].apply(is_holder)
-    hit = df[mask].copy()
+    hit = df[df[byo_col].apply(is_holder)].copy()
     print(f"病初診の届出医療機関数: {len(hit)}", file=sys.stderr)
 
     records = []
     for _, r in hit.iterrows():
         records.append({
-            "code":    str(r[num_col]).strip() if pd.notna(r[num_col]) else "",
-            "name":    str(r[name_col]).strip(),
+            "code": str(r[num_col]).strip() if pd.notna(r[num_col]) else "",
+            "name": str(r[name_col]).strip(),
             "address": str(r[addr_col]).strip() if pd.notna(r[addr_col]) else "",
-            "tel":     str(r[tel_col]).strip() if pd.notna(r[tel_col]) else "",
-            "beds":    (str(r[bed_col]).strip() if bed_col and pd.notna(r[bed_col]) else ""),
+            "tel": str(r[tel_col]).strip() if pd.notna(r[tel_col]) else "",
+            "beds": (str(r[bed_col]).strip() if bed_col and pd.notna(r[bed_col]) else ""),
             "byoshoshin_no": str(r[byo_col]).strip(),
         })
-    return records
+    return byo_col, records
 
 
 OSAKA_CITIES = [
@@ -208,11 +187,9 @@ OSAKA_CITIES = [
 
 
 def detect_city(addr: str) -> str:
-    if not addr:
-        return ""
+    if not addr: return ""
     for c in OSAKA_CITIES:
-        if c in addr:
-            return c
+        if c in addr: return c
     m = re.search(r"(大阪市[^\s〒0-9]{1,3}?区)", addr)
     if m: return m.group(1)
     m = re.search(r"(堺市[^\s〒0-9]{1,3}?区)", addr)
@@ -223,10 +200,10 @@ def detect_city(addr: str) -> str:
 
 
 def main():
-    zip_url = find_latest_ika_zip_url()
-    df_raw = load_osaka_ika_df(zip_url)
+    zip_url, zip_bytes = try_get_zip()
+    osaka_xlsx, df_raw = load_osaka_ika_df(zip_bytes)
     df = normalize_df(df_raw)
-    records = extract_byoshoshin(df)
+    byo_col, records = extract_byoshoshin(df)
 
     for r in records:
         r["city"] = detect_city(r["address"])
@@ -243,6 +220,8 @@ def main():
     meta = {
         "source_url": INDEX_URL,
         "zip_url": zip_url,
+        "osaka_xlsx": osaka_xlsx,
+        "byoshoshin_column": byo_col,
         "data_year_month": year_month,
         "generated_at": datetime.now(jst).isoformat(timespec="seconds"),
         "record_count": len(records),
