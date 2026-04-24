@@ -3,7 +3,7 @@ name: update-data
 on:
   schedule:
     # 日本時間 毎月10日 朝6:00 に実行
-   - cron: "0 21 9 * *"
+    - cron: "0 21 9 * *"
   workflow_dispatch:
 
 permissions:
