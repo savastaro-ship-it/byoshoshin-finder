@@ -122,7 +122,14 @@ def find_col(df: pd.DataFrame, candidates: list[str]) -> str:
 def extract_byoshoshin(df: pd.DataFrame) -> tuple[str, list[dict]]:
     """受理記号カラムの値が「病初診」の行だけ抽出する。"""
     name_col    = find_col(df, ["医療機関名称"])
-    addr_col    = find_col(df, ["医療機関所在地（住所）", "医療機関所在地", "所在地"])
+    # 住所カラムは列名完全一致で取る（「医療機関所在地（郵便番号）」と誤マッチするのを回避）
+    addr_col = None
+    for c in df.columns:
+        if str(c).strip() == "医療機関所在地（住所）":
+            addr_col = c
+            break
+    if addr_col is None:
+        addr_col = find_col(df, ["住所"])  # フォールバック
     tel_col     = find_col(df, ["電話番号"])
     num_col     = find_col(df, ["医療機関番号"])
     notice_col  = find_col(df, ["受理届出名称"])
