@@ -92,7 +92,7 @@ def load_osaka_ika_df(zip_bytes: bytes) -> tuple[str, pd.DataFrame]:
 def normalize_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     header_row = None
     for i in range(min(20, len(df_raw))):
-        row = df_raw.iloc[i].astype(str).tolist()
+        row = [str(x) if x is not None else "" for x in df_raw.iloc[i].tolist()]
         joined = "".join(row)
         if "医療機関名称" in joined and ("医療機関所在地" in joined or "所在地" in joined):
             header_row = i
