@@ -191,7 +191,12 @@ function buildSuggest() {
     const c = r.city || "";
     if (c) counts[c] = (counts[c] || 0) + 1;
   }
-  const top = Object.entries(counts).sort((a,b) => b[1]-a[1]); //slice(0, 10);
+  const top = Object.entries(counts).sort((a,b) => {
+  const group = c => c.startsWith("大阪市") ? 0 : c.startsWith("堺市") ? 1 : 2;
+  const ga = group(a[0]), gb = group(b[0]);
+  if (ga !== gb) return ga - gb; // 大阪市→堺市→その他
+  return b[1] - a[1]; // 同グループ内は件数多い順
+});
   $sug.innerHTML = top.map(([c, n]) => `<button data-q="${esc(c)}">${esc(c)} (${n})</button>`).join("");
   $sug.addEventListener("click", e => {
     const b = e.target.closest("button");
