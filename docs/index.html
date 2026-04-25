@@ -139,7 +139,7 @@
 
   <div class="search">
     <input id="q" type="search" inputmode="search" autocomplete="off"
-           placeholder="地名・病院名・人名を入力（例: 門真、茨木、中央区）">
+           placeholder="地名・病院名を入力（例: 門真、茨木、中央区）">
     <div class="hint" id="meta">データを読み込み中…</div>
   </div>
 
@@ -215,7 +215,7 @@ function render() {
     // スペース区切りでAND検索。住所・市・名前・電話・開設者・管理者 すべて対象
     const terms = q.split(/\s+/).filter(Boolean);
     hits = RECORDS.filter(r => {
-      const hay = `${r.name} ${r.address} ${r.city} ${r.tel} ${r.founder||""} ${r.manager||""}`;
+      const hay = `${r.name} ${r.address} ${r.city}`;
       return terms.every(t => hay.includes(t));
     });
   }
