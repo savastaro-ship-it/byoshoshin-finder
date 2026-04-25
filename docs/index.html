@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
 <title>大阪・病初診 届出医療機関 検索</title>
 <style>
   :root {
@@ -64,6 +65,30 @@
     font-size: 12px; color: var(--muted); margin: 0 0 8px;
   }
   .card .addr { font-size: 13px; margin: 0 0 6px; line-height: 1.5; }
+
+  /* 開設者・管理者ブロック */
+  .card .people {
+    font-size: 12px; line-height: 1.6;
+    margin: 8px 0 4px;
+    color: var(--ink);
+    border-top: 1px dashed var(--line);
+    padding-top: 8px;
+  }
+  .card .people .row { display: flex; gap: 6px; align-items: baseline; }
+  .card .people .label {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 0 6px;
+    border-radius: 4px;
+    line-height: 1.5;
+    min-width: 44px;
+    text-align: center;
+  }
+  .card .people .val { word-break: break-all; }
+  .card .people .empty { color: var(--muted); font-size: 11px; }
+
   .card .tel a {
     font-size: 13px; color: var(--accent); text-decoration: none;
     font-variant-numeric: tabular-nums;
@@ -107,14 +132,14 @@
   <header>
     <h1>大阪・病初診 届出医療機関 検索</h1>
     <p>
-      近畿厚生局が公表している「施設基準の届出受理医療機関名簿」から、
-      <strong>病初診</strong>を届け出ている大阪府内の医科医療機関を抽出して検索できます。
+      近畿厚生局が公表している「施設基準の届出受理医療機関名簿」と「コード内容別医療機関一覧表」から、
+      <strong>病初診</strong>を届け出ている大阪府内の医科医療機関を抽出して、開設者・管理者と一緒に表示します。
     </p>
   </header>
 
   <div class="search">
     <input id="q" type="search" inputmode="search" autocomplete="off"
-           placeholder="地名を入力（例: 門真、茨木、中央区、守口）">
+           placeholder="地名・病院名・人名を入力（例: 門真、茨木、中央区）">
     <div class="hint" id="meta">データを読み込み中…</div>
   </div>
 
@@ -123,7 +148,8 @@
   <div id="list"></div>
 
   <footer>
-    出典：<a href="https://kouseikyoku.mhlw.go.jp/kinki/gyomu/gyomu/hoken_kikan/shitei_jokyo_00004.html" target="_blank" rel="noopener">近畿厚生局「保険医療機関・保険薬局の施設基準の届出受理状況」</a><br>
+    出典：<a href="https://kouseikyoku.mhlw.go.jp/kinki/gyomu/gyomu/hoken_kikan/shitei_jokyo_00004.html" target="_blank" rel="noopener">近畿厚生局「保険医療機関・保険薬局の施設基準の届出受理状況」</a>
+    ／ <a href="https://kouseikyoku.mhlw.go.jp/kinki/tyousa/shinkishitei.html" target="_blank" rel="noopener">「保険医療機関・保険薬局の指定一覧」</a><br>
     このページは上記公表データを元に作成した非公式の検索ビューです。正確な情報は必ず出典側でご確認ください。
   </footer>
 </div>
@@ -137,7 +163,6 @@ const $sug   = document.getElementById("suggest");
 
 let RECORDS = [];
 
-// ---- ロード ----
 Promise.all([
   fetch("data.json").then(r => r.json()),
   fetch("meta.json").then(r => r.json()).catch(() => null),
@@ -145,12 +170,13 @@ Promise.all([
   RECORDS = data;
   if (meta) {
     const ym = meta.data_year_month || "";
-    $meta.textContent = `${ym ? ym + " 版／" : ""}${meta.record_count ?? data.length}件（病初診 届出のみ）`;
+    const matched = meta.matched_kanri ?? "";
+    const matchedTxt = matched ? `／開設者・管理者突合 ${matched}件` : "";
+    $meta.textContent = `${ym ? ym + " 版／" : ""}${meta.record_count ?? data.length}件（病初診 届出のみ）${matchedTxt}`;
   } else {
     $meta.textContent = `${data.length}件（病初診 届出のみ）`;
   }
   buildSuggest();
-  // URLハッシュから初期クエリを拾う（#q=門真）
   const h = new URLSearchParams(location.hash.slice(1));
   const init = h.get("q");
   if (init) { $q.value = init; }
@@ -159,7 +185,6 @@ Promise.all([
   $meta.innerHTML = `<div class="err">データ読み込みエラー: ${err}<br>data.json と meta.json を同じフォルダに置いてください。</div>`;
 });
 
-// ---- よく使う地名のサジェスト（件数上位10） ----
 function buildSuggest() {
   const counts = {};
   for (const r of RECORDS) {
@@ -177,7 +202,6 @@ function buildSuggest() {
   });
 }
 
-// ---- 検索 ----
 $q.addEventListener("input", render);
 
 function render() {
@@ -188,10 +212,10 @@ function render() {
   if (!q) {
     hits = RECORDS;
   } else {
-    // スペース区切りでAND検索。住所・市区町村・医療機関名・電話 いずれにもマッチ
+    // スペース区切りでAND検索。住所・市・名前・電話・開設者・管理者 すべて対象
     const terms = q.split(/\s+/).filter(Boolean);
     hits = RECORDS.filter(r => {
-      const hay = `${r.name} ${r.address} ${r.city} ${r.tel}`;
+      const hay = `${r.name} ${r.address} ${r.city} ${r.tel} ${r.founder||""} ${r.manager||""}`;
       return terms.every(t => hay.includes(t));
     });
   }
@@ -201,7 +225,7 @@ function render() {
     : `全${hits.length}件`;
 
   if (hits.length === 0) {
-    $list.innerHTML = `<div class="empty">該当なし。別の地名で試してみてください。</div>`;
+    $list.innerHTML = `<div class="empty">該当なし。別のキーワードで試してみてください。</div>`;
     return;
   }
 
@@ -216,7 +240,15 @@ function card(r, terms) {
   const telDisplay = hilite(r.tel || "", terms);
   const beds = r.beds && r.beds !== "0" ? ` ／ 病床${esc(r.beds)}` : "";
 
-  // 外部リンク
+  const founder = (r.founder || "").trim();
+  const manager = (r.manager || "").trim();
+  const founderHtml = founder
+    ? `<span class="val">${hilite(founder, terms)}</span>`
+    : `<span class="empty">—</span>`;
+  const managerHtml = manager
+    ? `<span class="val">${hilite(manager, terms)}</span>`
+    : `<span class="empty">—</span>`;
+
   const mapsQ = encodeURIComponent(r.name + " " + r.address);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQ}`;
   const telLink = tel ? `<a href="tel:${tel}">📞 ${telDisplay}</a>` : "";
@@ -226,6 +258,10 @@ function card(r, terms) {
       <div class="name"><span class="tag">病初診</span>${name}</div>
       <div class="meta">${esc(r.code || "")}${beds}</div>
       <div class="addr">${addr || "—"}</div>
+      <div class="people">
+        <div class="row"><span class="label">開設者</span>${founderHtml}</div>
+        <div class="row"><span class="label">管理者</span>${managerHtml}</div>
+      </div>
       <div class="tel">${telLink}</div>
       <div class="links">
         <a href="${mapsUrl}" target="_blank" rel="noopener">Googleマップで開く</a>
@@ -233,7 +269,6 @@ function card(r, terms) {
     </div>`;
 }
 
-// ---- ユーティリティ ----
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
