@@ -191,7 +191,7 @@ function buildSuggest() {
     const c = r.city || "";
     if (c) counts[c] = (counts[c] || 0) + 1;
   }
-  const top = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 10);
+  const top = Object.entries(counts).sort((a,b) => b[1]-a[1]); //slice(0, 10);
   $sug.innerHTML = top.map(([c, n]) => `<button data-q="${esc(c)}">${esc(c)} (${n})</button>`).join("");
   $sug.addEventListener("click", e => {
     const b = e.target.closest("button");
