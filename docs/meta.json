@@ -1,12 +1,16 @@
 {
   "source_url": "https://kouseikyoku.mhlw.go.jp/kinki/gyomu/gyomu/hoken_kikan/shitei_jokyo_00004.html",
-  "zip_url": "https://kouseikyoku.mhlw.go.jp/kinki/s2026.4_sisetukijun_ika.zip",
-  "osaka_xlsx": "s2026.4_sisetukijun_ika/s2026.4_sisetukijun_osaka_ika.xlsx",
-  "byoshoshin_column": "受理記号",
+  "sisetu_zip_url": "https://kouseikyoku.mhlw.go.jp/kinki/s2026.4_sisetukijun_ika.zip",
+  "zentai_zip_url": "https://kouseikyoku.mhlw.go.jp/kinki/2026.4_kikanzentai_ika.zip",
+  "sisetu_xlsx": "s2026.4_sisetukijun_ika/s2026.4_sisetukijun_osaka_ika.xlsx",
+  "zentai_xlsx": "2026.4_kikanzentai_ika/2026.4_kikanzentai_osaka_ika.xlsx",
+  "sisetu_year_month": "2026-04",
+  "zentai_year_month": "2026-04",
   "data_year_month": "2026-04",
-  "generated_at": "2026-04-24T14:27:23+09:00",
+  "generated_at": "2026-04-25T12:03:59+09:00",
   "record_count": 51,
+  "matched_kanri": 51,
   "prefecture": "大阪府",
   "category": "医科",
-  "filter": "病初診 届出医療機関のみ"
+  "filter": "病初診 届出医療機関のみ＋開設者・管理者突合"
 }
