@@ -243,10 +243,10 @@ function card(r, terms) {
   const founder = (r.founder || "").trim();
   const manager = (r.manager || "").trim();
   const founderHtml = founder
-    ? `<span class="val">${hilite(founder, terms)}</span>`
+    ? `<span class="val">${esc(founder)}</span>`
     : `<span class="empty">—</span>`;
   const managerHtml = manager
-    ? `<span class="val">${hilite(manager, terms)}</span>`
+    ? `<span class="val">${esc(manager)}</span>`
     : `<span class="empty">—</span>`;
 
   const mapsQ = encodeURIComponent(r.name + " " + r.address);
